@@ -27,3 +27,21 @@ trnado.py
  Shortest transaction:           0.23
 
 
+>>> s = open('simple_obj.py').read()
+>>> co = compile(s, 'simple_obj.py', 'exec')
+>>> import dis
+>>> dis.dis(co)
+  1           0 LOAD_CONST               0 (1)
+              3 STORE_NAME               0 (i)
+
+  2           6 LOAD_CONST               1 ('Python')
+              9 STORE_NAME               1 (s)
+
+  3          12 BUILD_MAP                0
+             15 STORE_NAME               2 (d)
+
+  4          18 BUILD_LIST               0
+             21 STORE_NAME               3 (l)
+             24 LOAD_CONST               2 (None)
+             27 RETURN_VALUE        
+
