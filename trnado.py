@@ -1,15 +1,20 @@
 #!/usr/bin/env python
-import sys
+import sys,os,time
 import tornado.httpserver
 import tornado.ioloop
 import tornado.web
 global cnt 
 cnt = 0
+cur_dir =  os.path.dirname(os.path.abspath(__file__))
+file_out = open(cur_dir + '/tanado.log','a')
+seprate = ' '
 class ServeHTTP(tornado.web.RequestHandler):
     def get(self, txt, num):
         global cnt
         cnt = cnt + 1
-        print txt,num,cnt 
+        log_str = ''.join([time.ctime()[4: -5], txt, seprate,  str(num), seprate, str(cnt), '\n'])
+        file_out.write(log_str)
+        #print txt,num,cnt 
         for i in xrange(int(num)):
             self.write("%d: %s\n" % (i, txt))
 
