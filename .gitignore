@@ -1,2 +1,4 @@
 #python
 *.py[cod]
+*.log
+*.out
