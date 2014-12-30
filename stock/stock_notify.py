@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from httpGet import httpGetContent
 from common import decimal, validate_decimal, str_to_date
 import urllib2
+import warningEmail
 
 #stocks = {
 #    'sh600999': 0.02,
@@ -114,7 +115,6 @@ class Stock(threading.Thread):
         return res[0][1], res[0][2] #recent_price[1] 
 
     def emailNotify(self, subject, content):
-        import warningEmail
         wemail = warningEmail.warningEmail()
         wemail.send(subject, content)
         self.saveConfig()
@@ -216,18 +216,57 @@ def stock_base_info(code):
         td_select_value = lambda td: td.select('span')[1].text.strip().replace('\t','')
         for i, td in enumerate(td_list):
             #print td_select_key(td), td_select_value(td)
-            stock_dict[td_select_key(td)] = td_select_value(td)
-
+            #stock_dict[td_select_key(td)] = td_select_value(td)
+            if i == 0:    # 主营业务：
+                stock_dict["main_busyness"] = td_select_value(td)
+            elif i == 1:    # 所属行业：
+                stock_dict["industry"] = td_select_value(td)
+            elif i == 2:    # 涉及概念：
+                stock_dict["concept"] = td_select_value(td)
+ 
         table = profile[0].select('table')[1]
         td_list = table.select('td')
         td_select_key = lambda td: td.select('span')[0].text.strip().replace('\t','')
-        td_select_value = lambda td: td.select('span')[1].text.strip().replace('\t','')
+        #td_select_value = lambda td: td.select('span')[1].text.strip().replace('\t','')
+        td_select = lambda td: td.select('span')[1].text.strip().replace('\t','')
         for i, td in enumerate(td_list):
             #print td_select_key(td), td_select_value(td)
-            stock_dict[td_select_key(td)] = td_select_value(td)
+            #stock_dict[td_select_key(td)] = td_select_value(td)
+            stock_dict["code"] = code
+            if i == 0:    # 市盈率(动态)：
+                stock_dict["pe_ratio_dynamic"] = validate_decimal(td_select(td))
+            elif i == 2:  # 净资产收益率
+                stock_dict['return_on_equity'] = validate_decimal(td_select(td))
+            elif i == 3:  # 分类
+                text = td_select(td)
+                if text == u"大盘股":
+                    stock_dict['type'] = 'big'
+                elif text == u'中盘股':
+                    stock_dict['type'] = 'medium'
+                elif text == u"小盘股":
+                    stock_dict['type'] = 'small'
+                else:
+                    stock_dict['type'] = text
+            elif i == 4:  # 市盈率(静态)
+                stock_dict['pe_ratio_static'] = validate_decimal(td_select(td))
+            elif i == 5:  # 营业收入
+                stock_dict['income'] = validate_decimal(td_select(td))
+            elif i == 6:  # 每股净资产
+                stock_dict['assert_per_share'] = validate_decimal(td_select(td))
+            elif i == 7:  # 总股本
+                stock_dict['total_capital'] = validate_decimal(td_select(td))
+            elif i == 8:  # 市净率
+                stock_dict['pb'] = validate_decimal(td_select(td))
+            elif i == 9:  # 净利润
+                stock_dict['net_profit'] = validate_decimal(td_select(td))
+            elif i == 10:  # 每股现金流 
+                stock_dict['cash_flow_per_share'] = validate_decimal(td_select(td))
+            elif i == 11: # 流通股本
+                stock_dict['circulate_capital'] = validate_decimal(td_select(td))
 
-        for item in stock_dict:
-            print item, stock_dict[item]
+
+        #for item in stock_dict:
+        #    print item, stock_dict[item]
 
         return stock_dict
 
@@ -290,8 +329,8 @@ class DailyStat():
             print e
             exit()
         current_beijing_date = get_beijing_time().strftime('%Y-%m-%d')
-        #table_name = 'table' + current_beijing_date.translate(None, '-')
-        table_name = 'table20141226'
+        table_name = 'table' + current_beijing_date.translate(None, '-')
+        #table_name = 'table20141226'
         for stock_id in self.code_list:
             #print stock_id
             select = NOW_PRICE_SQL.replace('_TABLENAME_', table_name)
@@ -366,7 +405,7 @@ def data_parser(data):
 
         key = (stock_id, date, time)
 
-        value = tuple(params[1:30])
+        value = tuple(params[0:30])
 
         ret[key] = value
     return ret
@@ -379,7 +418,9 @@ def stock_crawler():
     code_list = []
     code_list.extend(read_code('sz.list', 'sz'))
     code_list.extend(read_code('sh.list', 'sh'))
- 
+
+
+    stocks =[]
     for start_id in range(0, len(code_list), PAGESIZE):
         end_id = min(start_id + PAGESIZE, len(code_list))
         sub_list = code_list[start_id : end_id]
@@ -402,7 +443,59 @@ def stock_crawler():
             #continue
         data = data_parser(content)
         
+
+        #print data
+        for (stockId, d, t) in data:
+            yesterday_closing_price = float(data[stockId,d,t][2])
+            now_price =  float(data[stockId,d,t][3])
+            try:    
+                riseFallRate = (now_price - yesterday_closing_price) / yesterday_closing_price
+            #print riseFallRate
+            except Exception as e:
+                riseFallRate = 0
+                print e 
+            #    pass
+            #print stockId, now_price, yesterday_closing_price, riseFallRate
+            if now_price != 0 and yesterday_closing_price !=0 \
+                and (riseFallRate > 0.1 or riseFallRate < -0.1):
+                stocks.append((stockId,data[stockId,d,t][0],now_price,yesterday_closing_price,riseFallRate))
+            
+
+    #print stocks
+    sortStocks = sorted(stocks, key = lambda s: s[4], reverse = True)
+
+    emailContent = ''
+    #file = open('info.txt','w')
+    for stock in sortStocks:
+        #print stock[0], stock[1].decode('gbk'), stock[2], stock[3], stock[4]
+        try: 
+            seprator = '-' * 40
+            info = stock_base_info(stock[0][2:])
+            strInfo = '%s %s %s %.2f(tl) %.2f(p) %.2f(rf) %.2f(d) %.2f(s) %.2f(pb) %.2f \n%s |%s \n%s \n%s\n' %(info['code'], stock[1].decode('gbk').encode('utf-8'), info['type'], info['total_capital']* stock[2], stock[2], stock[4], \
+               info['pe_ratio_static'], info['pe_ratio_dynamic'], info['pb'], info['income'], \
+               info['industry'].encode('utf-8'), info['main_busyness'].encode('utf-8'),
+               info['concept'].encode('utf-8'), seprator)
+            print strInfo
+            #print '---------------------------------------------------'
+            
+        except Exception as e:
+            info = {}
+            print stock
+            print e
+
+        emailContent += strInfo
+        #emailContent = u''.join((emailContent, strInfo)).encode('utf-8').strip()
+
+    wemail = warningEmail.warningEmail()
+    wemail.send('daily report', emailContent)
+ 
+        #file.write(str(stock))
+
+    #file.close()
         
+            
+            
+            
         #print data
      
 
@@ -438,7 +531,16 @@ if __name__ == '__main__':
     remindPrice() 
     #dailyStatAndRemind()
     #tstart = time.time()
+    #stock = ['600170',u'上海建工'.encode('gbk'),8.64, 8.42, 0.1]
     #info = stock_base_info('600170')
+    #600xxx 赤生化 small 市值 股价 静态市盈率 动态市盈率 pb 收入
+    #行业| 主营业务
+    #概念
+    #strInfo = '%s %s %s %.2f %.2f %.2f(d) %.2f(s) %.2f(pb) %.2f \n%s |%s \n%s' %(info['code'], stock[1].decode('gbk'), info['type'], info['total_capital']* stock[2], stock[2], \
+    #           info['pe_ratio_static'], info['pe_ratio_dynamic'], info['pb'], info['income'], \
+    #           info['industry'], info['main_busyness'],
+    #           info['concept'] )
+    #print strInfo
     #print time.time() - tstart
     #print info
 
