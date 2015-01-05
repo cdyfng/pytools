@@ -294,7 +294,7 @@ class DailyStat():
             riseFallRate = (p[1] - p[2]) / p[2]
             #print p, riseFallRate 
 
-            if p[1] != 0 and p[2] !=0 and (riseFallRate > 0.1 or riseFallRate < -0.1):
+            if p[1] != 0 and p[2] !=0 and (riseFallRate > 0.0995 or riseFallRate < -0.0995):
                 #print p[0], riseFallRate
                 stocks.append((p[0],p[1],p[2],riseFallRate))
 
@@ -413,11 +413,10 @@ def data_parser(data):
 PAGESIZE = 700
 WEB_TIME_OUT = 5
 DM_TIME_OUT = 10
-
 def stock_crawler():
     code_list = []
-    code_list.extend(read_code('sz.list', 'sz'))
-    code_list.extend(read_code('sh.list', 'sh'))
+    code_list.extend(read_code(os.path.dirname(os.path.abspath(__file__)) + '/sz.list', 'sz'))
+    code_list.extend(read_code(os.path.dirname(os.path.abspath(__file__)) + '/sh.list', 'sh'))
 
 
     stocks =[]
@@ -457,13 +456,14 @@ def stock_crawler():
             #    pass
             #print stockId, now_price, yesterday_closing_price, riseFallRate
             if now_price != 0 and yesterday_closing_price !=0 \
-                and (riseFallRate > 0.1 or riseFallRate < -0.1):
+                and (riseFallRate > 0.0995 or riseFallRate < -0.0995):
                 stocks.append((stockId,data[stockId,d,t][0],now_price,yesterday_closing_price,riseFallRate))
             
 
     #print stocks
     sortStocks = sorted(stocks, key = lambda s: s[4], reverse = True)
-
+    
+    emailContents = []
     emailContent = ''
     #file = open('info.txt','w')
     for stock in sortStocks:
@@ -483,11 +483,21 @@ def stock_crawler():
             print stock
             print e
 
-        emailContent += strInfo
-        #emailContent = u''.join((emailContent, strInfo)).encode('utf-8').strip()
-
+        if (len(emailContent) + len(strInfo) > 8000):
+            emailContents.append(emailContent)
+            emailContent = strInfo
+        else:
+            emailContent += strInfo
+            #emailContent = u''.join((emailContent, strInfo)).encode('utf-8').strip()
+    #print 'Content len', len(emailContent)
+    #print emailContent
+    #print 'Content len', len(emailContent)
     wemail = warningEmail.warningEmail()
-    wemail.send('daily report', emailContent)
+    i = 1
+    for s in emailContents:
+        print len(s)
+        wemail.send('daily report' + str(i), s)
+        i = i + 1
  
         #file.write(str(stock))
 
