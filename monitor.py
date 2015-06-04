@@ -100,7 +100,7 @@ class mon:
             VALUES('%s', '%d', '%d', '%d', '%s', '%d' ,'%f', '%f')" \
             % (data['Host'], data['MemFree'], data['MemUsage'],\
             data['MemTotal'], data['LoadAvg'], int(data['Time']),\
-            data['CpuUsage'],data['MemUsage'])
+            data['CpuUsage'],data['DiskUsage'])
         print data['CpuUsage'], data['DiskUsage']
         try:
             c.execute(sql)
